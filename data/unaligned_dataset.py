@@ -39,26 +39,6 @@ class UnalignedDataset(BaseDataset):
         self.transform_A = get_transform(self.opt, grayscale=(input_nc == 1))
         self.transform_B = get_transform(self.opt, grayscale=(output_nc == 1))
 
-        self.transform_Seg_A = get_transform(self.opt, grayscale=True)
-        self.transform_Seg_B = get_transform(self.opt, grayscale=True)
-
-        ### load segmentation
-        if ((not self.opt.no_segmentation if self.opt.isTrain else bool(0)) or (not self.opt.no_seg_input)):
-            self.dir_A_seg = os.path.join(opt.dataroot, opt.phase + '_seg_A')
-            self.dir_B_seg = os.path.join(opt.dataroot, opt.phase + '_seg_B')
-            self.A_seg_paths = sorted(make_dataset(self.dir_A_seg))
-            self.B_seg_paths = sorted(make_dataset(self.dir_B_seg))
-
-            A_centers_path = os.path.join(opt.dataroot, opt.phase + '_seg_A/Centers.mat')
-            B_centers_path = os.path.join(opt.dataroot, opt.phase + '_seg_B/Centers.mat')
-            Centers_A = sio.loadmat(A_centers_path)
-            Centers_B = sio.loadmat(B_centers_path)
-
-            opt.A_centers = Centers_A['C']
-            opt.B_centers = Centers_B['C']
-        else:
-            opt.A_centers = 0
-            opt.B_centers = 0
 
         #if not self.opt.no_ganFeat_loss if self.opt.isTrain else bool(0):
             #self.opt.netD = 'feat'
@@ -90,21 +70,7 @@ class UnalignedDataset(BaseDataset):
         A = self.transform_A(A_img)
         B = self.transform_B(B_img)
 
-        # apply the same transform to A_seg_map and B_seg_map (segmentation)
-        A_seg_map = B_seg_map = 0
-        A_seg_map_load = B_seg_map_load = 0
-        if (not self.opt.no_segmentation if self.opt.isTrain else bool(0)) or (not self.opt.no_seg_input):
-            A_seg_map_path = self.A_seg_paths[index_A]
-            A_seg_map_load = Image.open(A_seg_map_path).convert('RGB')
-            A_seg_map = self.transform_Seg_A(A_seg_map_load)
-            A_seg_map_load = np.array(A_seg_map_load)
-
-            B_seg_map_path = self.B_seg_paths[index_B]  # unaligned
-            B_seg_map_load = Image.open(B_seg_map_path).convert('RGB')
-            B_seg_map = self.transform_Seg_B(B_seg_map_load)
-            B_seg_map_load = np.array(B_seg_map_load)
-
-        return {'A': A, 'B': B, 'A_paths': A_path, 'B_paths': B_path, 'A_seg_map': A_seg_map, 'B_seg_map': B_seg_map, 'A_seg_map_load': A_seg_map_load, 'B_seg_map_load': B_seg_map_load}
+        return {'A': A, 'B': B, 'A_paths': A_path, 'B_paths': B_path}
 
     def __len__(self):
         """Return the total number of images in the dataset.
