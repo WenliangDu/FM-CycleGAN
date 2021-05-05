@@ -4,7 +4,6 @@ from util.image_pool import ImagePool
 from .base_model import BaseModel
 from . import networks
 
-from .segmentation import getCrossEntropyInput, getFakeSegMap
 from util import util
 from data.base_dataset import get_transform
 import PIL
@@ -63,8 +62,6 @@ class CycleGANModel(BaseModel):
         # specify the training losses you want to print out. The training/test scripts will call <BaseModel.get_current_losses>
         self.loss_names = ['D_A', 'G_A', 'cycle_A', 'idt_A', 'D_B', 'G_B', 'cycle_B', 'idt_B']
         if self.isTrain:
-            if not self.opt.no_segmentation:
-                self.loss_names = self.loss_names + ['G_Seg_A', 'G_Seg_B']
             if not self.opt.no_ganFeat_loss:
                 self.loss_names = self.loss_names + ['G_Feat_A', 'G_Feat_B']
         #self.loss_names = ['D_A', 'G_A', 'cycle_A', 'idt_A', 'D_B', 'G_B', 'cycle_B', 'idt_B']
@@ -84,8 +81,6 @@ class CycleGANModel(BaseModel):
 
         # determine netG_input_nc
         netG_input_nc = opt.input_nc
-        if not opt.no_seg_input:
-            netG_input_nc += opt.seg_nc
 
         # define networks (both Generators and discriminators)
         # The naming is different from those used in the paper.
@@ -115,8 +110,6 @@ class CycleGANModel(BaseModel):
             self.optimizer_D = torch.optim.Adam(itertools.chain(self.netD_A.parameters(), self.netD_B.parameters()), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizers.append(self.optimizer_G)
             self.optimizers.append(self.optimizer_D)
-            # define segmentation loss
-            self.criterionSeg = torch.nn.CrossEntropyLoss()
             # dfine feature matching loss
             self.criterionFeat = torch.nn.L1Loss()
 
@@ -133,35 +126,17 @@ class CycleGANModel(BaseModel):
         self.real_B = input['B' if AtoB else 'A'].to(self.device)
         self.image_paths = input['A_paths' if AtoB else 'B_paths']
 
-        # load segmentaions for inputs of generator
-        self.A_seg_map = input['A_seg_map' if AtoB else 'B_seg_map'].to(self.device)
-        self.B_seg_map = input['B_seg_map' if AtoB else 'A_seg_map'].to(self.device)
-        # load segmentations for calculating segmentation losses
-        self.A_seg_map_load = input['A_seg_map_load' if AtoB else 'B_seg_map_load']
-        self.B_seg_map_load = input['B_seg_map_load' if AtoB else 'A_seg_map_load']
 
-        # if segmentation, encode the input
-        if not self.opt.no_seg_input:
-            self.input_A = self.catImgAndSeg(self.real_A, self.A_seg_map)
-            self.input_B = self.catImgAndSeg(self.real_B, self.B_seg_map)
-        else:
-            self.input_A = self.real_A
-            self.input_B = self.real_B
+        self.input_A = self.real_A
+        self.input_B = self.real_B
 
     def forward(self):
         """Run forward pass; called by both functions <optimize_parameters> and <test>."""
         self.fake_B = self.netG_A(self.input_A)  # G_A(A)
         self.fake_A = self.netG_B(self.input_B)  # G_B(B)
 
-        if not self.opt.no_seg_input:
-            fakeSegMap_A = self.getSegMap(self.fake_A, self.opt.A_centers)
-            fakeSegMap_B = self.getSegMap(self.fake_B, self.opt.B_centers)
-
-            self.input_fake_A = self.catImgAndSeg(self.fake_A, fakeSegMap_A)
-            self.input_fake_B = self.catImgAndSeg(self.fake_B, fakeSegMap_B)
-        else:
-            self.input_fake_A = self.fake_A
-            self.input_fake_B = self.fake_B
+        self.input_fake_A = self.fake_A
+        self.input_fake_B = self.fake_B
 
         self.rec_A = self.netG_B(self.input_fake_B)  # G_B(G_A(A))
         self.rec_B = self.netG_A(self.input_fake_A)   # G_A(G_B(B))
@@ -227,16 +202,6 @@ class CycleGANModel(BaseModel):
         self.loss_cycle_A = self.criterionCycle(self.rec_A, self.real_A) * lambda_A
         # Backward cycle loss || G_A(G_B(B)) - B||
         self.loss_cycle_B = self.criterionCycle(self.rec_B, self.real_B) * lambda_B
-        # add segmentation loss
-        self.loss_G_Seg_A = 0
-        self.loss_G_Seg_B = 0
-        if not self.opt.no_segmentation:
-            # A
-            RecSegTensorA, RealSegTensorA = getCrossEntropyInput(self.rec_A.data, self.opt.A_centers, self.A_seg_map_load.data[0])
-            self.loss_G_Seg_A = self.criterionSeg(RecSegTensorA, RealSegTensorA) * self.opt.lambda_Seg_A
-            # B
-            self.fakeSegTensorB, self.realSegTensorB = getCrossEntropyInput(self.rec_B, self.opt.B_centers, self.B_seg_map_load.data[0])
-            self.loss_G_Seg_B = self.criterionSeg(self.fakeSegTensorB, self.realSegTensorB) * self.opt.lambda_Seg_B
 
         # add feature matching loss
         pred_rec_A = self.netD_B(self.rec_A)
@@ -260,7 +225,7 @@ class CycleGANModel(BaseModel):
 
 
         # combined loss and calculate gradients
-        self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B + self.loss_G_Seg_A + self.loss_G_Seg_B + self.loss_G_Feat_A + self.loss_G_Feat_B
+        self.loss_G = self.loss_G_A + self.loss_G_B + self.loss_cycle_A + self.loss_cycle_B + self.loss_idt_A + self.loss_idt_B + self.loss_G_Feat_A + self.loss_G_Feat_B
         self.loss_G.backward()
 
     def optimize_parameters(self):
@@ -278,25 +243,3 @@ class CycleGANModel(BaseModel):
         self.backward_D_A()      # calculate gradients for D_A
         self.backward_D_B()      # calculate graidents for D_B
         self.optimizer_D.step()  # update D_A and D_B's weights
-
-    def getSegMap(self, Img, centers):
-        Img_I = util.tensor2im(Img)
-        if len(Img_I.shape) > 2:
-            Img_I = Img_I[:, :, 0]
-        SegMap = getFakeSegMap(Img_I, centers)
-        # PIL=>uint8=>Tensor=>cuda
-        SegMap = SegMap.astype(np.uint8)
-        SegMap = torch.from_numpy(SegMap)
-        SegMap = Variable(SegMap.data.cuda())# cpu=>gpu
-        return SegMap
-
-    def catImgAndSeg(self, Img, Seg):
-        size = Seg.size()
-        while len(size) < 4:
-            Seg = torch.unsqueeze(Seg, 0)
-            size = Seg.size()
-        oneHot_size = (size[0], self.opt.seg_nc, size[2], size[3])
-        input_seg = torch.cuda.FloatTensor(torch.Size(oneHot_size)).zero_()
-        input_img_seg = input_seg.scatter_(1, Seg.data.long().cuda(), 1.0)
-        catImgSeg = torch.cat((Img, input_img_seg), dim=1)
-        return catImgSeg
