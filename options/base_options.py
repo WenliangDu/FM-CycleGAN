@@ -55,11 +55,6 @@ class BaseOptions():
         parser.add_argument('--verbose', action='store_true', help='if specified, print more debugging information')
         parser.add_argument('--suffix', default='', type=str, help='customized suffix: opt.name = opt.name + suffix: e.g., {model}_{netG}_size{load_size}')
 
-        # add segmentation options
-        parser.add_argument('--seg_nc', type=int, default=3, help='# of input segmentation channels')
-        parser.add_argument('--no_seg_input', action='store_true', help='if specified, do *not* add segmentation map as input')
-
-
         self.initialized = True
         return parser
 
