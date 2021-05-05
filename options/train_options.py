@@ -36,18 +36,11 @@ class TrainOptions(BaseOptions):
         parser.add_argument('--lr_policy', type=str, default='linear', help='learning rate policy. [linear | step | plateau | cosine]')
         parser.add_argument('--lr_decay_iters', type=int, default=50, help='multiply by a gamma every lr_decay_iters iterations')
 
-        # add segmentation options
-        #parser.add_argument('--no_L1_loss', action='store_true', help='if specified, do *not* use L1 loss')
-        parser.add_argument('--no_segmentation', action='store_true', help='if specified, do *not* add segmentation loss as input')
         # add feature matching options
         parser.add_argument('--no_ganFeat_loss', action='store_true', help='if specified, do *not* use discriminator feature matching loss')
         parser.add_argument('--num_D', type=int, default=1, help='number of discriminators to use')
-        #parser.add_argument('--lambda_Seg', type=float, default=10.0, help='weight for segmentation loss')
-        #parser.add_argument('--lambda_L1', type=float, default=100.0, help='weight for segmentation loss')
 
         # add cycle and cycle_segmentation loss
-        parser.add_argument('--lambda_Seg_A', type=float, default=10.0, help='weight for segmentation loss of A and rec_A')
-        parser.add_argument('--lambda_Seg_B', type=float, default=10.0, help='weight for segmentation loss of B and rec_B')
         parser.add_argument('--lambda_feat_A', type=float, default=20.0, help='weight for feature matching loss of A and rec_A')
         parser.add_argument('--lambda_feat_B', type=float, default=20.0, help='weight for feature matching loss of B and rec_B')
 
